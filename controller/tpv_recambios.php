@@ -213,16 +213,44 @@ class tpv_recambios extends fbase_controller
         $con_stock = isset($_REQUEST['con_stock']);
         $this->results = $this->articulo->search($this->query, 0, $codfamilia, $con_stock, $codfabricante);
 
+        $atributos = array();
         /// buscamos por código de barras de la combinación
         $combi0 = new articulo_combinacion();
         foreach ($combi0->search($this->query) as $combi) {
-            $articulo = $this->articulo->get($combi->referencia);
+            if(!array_key_exists($combi->refcombinacion, $atributos)) {
+                $atributos[$combi->refcombinacion] = array(
+                    'refcombinacion' => $combi->refcombinacion,
+                    'referencia' => $combi->referencia,
+                    'impactoprecio' => $combi->impactoprecio,
+                    'valores' => array(),
+                    'codbarras' => $combi->codbarras
+                );
+            }
+            $atributos[$combi->refcombinacion]['valores'][] = array(
+                'nombreatributo' => $combi->nombreatributo,
+                'valor' => $combi->valor
+            );
+        }
+        foreach ($atributos as $ref => $atributo) {
+            $atributos_str = "";
+            foreach ($atributo['valores'] as $valor) {
+                if($atributos_str!=="") {
+                    $atributos_str .= ', ';
+                }
+                $atributos_str .= $valor['nombreatributo'] . ' - ' . $valor['valor'];
+            }
+            $articulo = $this->articulo->get($atributo['referencia']);
             if ($articulo) {
-                $articulo->codbarras = $combi->codbarras;
+                $articulo->referencia = $atributo['refcombinacion'];
+                $articulo->codbarras = $atributo['codbarras'];
+                $articulo->descripcion = $articulo->descripcion . "\n" . $atributos_str;
+                $articulo->pvp = $articulo->pvp + $atributo['impactoprecio'];
+                $articulo->tipo = null;
                 $this->results[] = $articulo;
             }
-        }
 
+        }
+        
         /// ejecutamos las funciones de las extensiones
         foreach ($this->extensions as $ext) {
             if ($ext->type == 'function' && $ext->params == 'new_search') {
